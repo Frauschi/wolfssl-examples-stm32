@@ -541,6 +541,19 @@ extern "C" {
             #define BUILD_CONFIG_NAME "bare"
         #endif
     #endif
+    #ifdef STM32_BARE_ARMASM
+        /* Thumb2 assembly alongside the STM32 HW ports (Makefile ARMASM=1). */
+        #define WOLFSSL_ARMASM
+        #define WOLFSSL_ARMASM_THUMB2
+        #define WOLFSSL_ARMASM_INLINE
+        #define WOLFSSL_ARMASM_NO_HW_CRYPTO
+        #define WOLFSSL_ARMASM_NO_NEON
+        #define WOLFSSL_ARM_ARCH 7
+        #define WOLFSSL_ARMASM_AES_BLOCK_INLINE
+        #ifndef STM32_BARE_SHA3_ASM
+            #define WC_SHA3_NO_ASM
+        #endif
+    #endif
 #elif defined(BUILD_ASM)
     /* Cortex-M Thumb2 inline-assembly accelerated software (no STM32 HW).
      * Routes SHA/Chacha/Poly/AES/Curve25519/SHA512 through the

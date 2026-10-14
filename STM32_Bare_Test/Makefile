@@ -259,6 +259,19 @@ ifeq ($(SHA3_ASM),1)
 else
   SHA3_DEFS :=
 endif
+# ARMASM=1 layers the Thumb2 assembly onto CONFIG=bare, so the STM32 HW ports
+# and WOLFSSL_ARMASM are both active.
+ifeq ($(ARMASM),1)
+  ifneq ($(CONFIG),bare)
+    $(error ARMASM=1 requires CONFIG=bare)
+  endif
+  ifneq ($(filter m0%,$(b_core)),)
+    $(error ARMASM=1 needs a Thumb2 core; BOARD=$(BOARD) is Cortex-M0+)
+  endif
+  ARMASM_DEFS := -DSTM32_BARE_ARMASM
+else
+  ARMASM_DEFS :=
+endif
 
 # STACK=1 enables per-algorithm peak stack + peak heap reporting. The
 # actual #defines (USE_WOLFSSL_MEMORY, WOLFSSL_TRACK_MEMORY_VERBOSE,
@@ -347,7 +360,7 @@ endif
 # does not warrant an axis (e.g. -DBENCH_MIN_RUNTIME_SEC=10.0 to average a
 # rejection-sampled operation over more iterations).
 EXTRA_DEFS ?=
-COMMON_DEFS := -DWOLFSSL_USER_SETTINGS $(CPU_DEFS) $(VARIANT_DEFS) $(BUILD_DEFS) $(PQC_DEFS) $(SHA3_DEFS) $(STACK_DEFS) $(GCM_DEFS) $(PUF_DEFS) $(CLK_DEFS) $(EXTRA_DEFS)
+COMMON_DEFS := -DWOLFSSL_USER_SETTINGS $(CPU_DEFS) $(VARIANT_DEFS) $(BUILD_DEFS) $(PQC_DEFS) $(SHA3_DEFS) $(ARMASM_DEFS) $(STACK_DEFS) $(GCM_DEFS) $(PUF_DEFS) $(CLK_DEFS) $(EXTRA_DEFS)
 
 # Optimization level, overridable for miscompile/UB bisects: make OPT=-O1 ...
 OPT ?= -O2
