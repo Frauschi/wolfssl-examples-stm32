@@ -32,6 +32,8 @@ extern "C" {
 /* Baseline config shared by all build variants. The Makefile selects the  */
 /* variant with -D flags:                                                  */
 /*   WOLFDEMO_CONFIG_HW - STM32 AES, HASH and PKA, Cortex-M SP math asm    */
+/*   WOLFDEMO_CONFIG_ASM - software crypto with Thumb-2 and SP math asm    */
+/*   WOLFDEMO_CONFIG_HYBRID - STM32 AES and HASH, Thumb-2 and SP math asm  */
 /*   WOLFDEMO_BENCH     - per-algorithm heap / stack tracking for bench    */
 /*                                                                         */
 /* Board: wolfDemo with STM32U585CIT6                                      */
@@ -52,10 +54,23 @@ extern "C" {
     /* AES (TinyAES IP, no 192-bit keys), HASH and PKA. The application
      * provides the PKA handle (hpka in src/hw_init.c). */
     #define WOLFSSL_STM32_PKA
+#endif
+
+#if defined(WOLFDEMO_CONFIG_HW) || defined(WOLFDEMO_CONFIG_HYBRID)
+    /* SHA-256 for LMS, XMSS and SLH-DSA in software, all else on the engine */
+    #define WOLFSSL_STM32_HASH_SHA256_SW
 #else
     /* Pure software crypto for comparison */
     #define NO_STM32_HASH
     #define NO_STM32_CRYPTO
+#endif
+
+#if defined(WOLFDEMO_CONFIG_ASM) || defined(WOLFDEMO_CONFIG_HYBRID)
+    #define WOLFSSL_ARMASM
+    #define WOLFSSL_ARMASM_INLINE
+    #define WOLFSSL_ARMASM_THUMB2
+    #define WOLFSSL_ARMASM_NO_NEON
+    #define WOLFSSL_ARMASM_NO_HW_CRYPTO
 #endif
 
 /* Single-threaded bare-metal, no filesystem */
@@ -86,7 +101,9 @@ extern "C" {
 #define WOLFSSL_HAVE_SP_ECC
 #define WOLFSSL_SP_384
 #define SP_WORD_SIZE 32
-#ifdef WOLFDEMO_CONFIG_HW
+#define WOLFSSL_SP_SMALL_STACK
+#if defined(WOLFDEMO_CONFIG_HW) || defined(WOLFDEMO_CONFIG_ASM) || \
+    defined(WOLFDEMO_CONFIG_HYBRID)
     #define WOLFSSL_SP_ASM
     #define WOLFSSL_SP_ARM_CORTEX_M_ASM
 #endif

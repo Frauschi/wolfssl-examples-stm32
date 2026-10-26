@@ -215,7 +215,7 @@ void HAL_RNG_MspInit(RNG_HandleTypeDef *hrng)
     __HAL_RCC_RNG_CLK_ENABLE();
 }
 
-#ifdef WOLFDEMO_CONFIG_HW
+#if defined(WOLFDEMO_CONFIG_HW) || defined(WOLFDEMO_CONFIG_HYBRID)
 /* HAL MSP callbacks for the crypto peripherals (clock enable / disable) */
 void HAL_CRYP_MspInit(CRYP_HandleTypeDef *hcryp)
 {
@@ -240,7 +240,9 @@ void HAL_HASH_MspDeInit(HASH_HandleTypeDef *hhash)
     (void)hhash;
     __HAL_RCC_HASH_CLK_DISABLE();
 }
+#endif
 
+#ifdef WOLFDEMO_CONFIG_HW
 void HAL_PKA_MspInit(PKA_HandleTypeDef *hpkah)
 {
     (void)hpkah;

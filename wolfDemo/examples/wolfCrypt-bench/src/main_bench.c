@@ -41,6 +41,10 @@
 
 #ifdef WOLFDEMO_CONFIG_HW
     #define BENCH_ACCEL_DESC "hardware accelerated"
+#elif defined(WOLFDEMO_CONFIG_HYBRID)
+    #define BENCH_ACCEL_DESC "STM32 AES and HASH, Thumb-2 assembly"
+#elif defined(WOLFDEMO_CONFIG_ASM)
+    #define BENCH_ACCEL_DESC "Thumb-2 assembly"
 #else
     #define BENCH_ACCEL_DESC "software only"
 #endif

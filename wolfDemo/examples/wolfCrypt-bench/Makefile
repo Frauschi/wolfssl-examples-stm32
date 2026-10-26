@@ -8,6 +8,8 @@
 # Usage:
 #   make                        # wolfCrypt benchmark, STM32 HW crypto
 #   make CONFIG=c    bench      # wolfCrypt benchmark, pure software
+#   make CONFIG=asm  bench      # wolfCrypt benchmark, software + Thumb-2 asm
+#   make CONFIG=hybrid bench    # wolfCrypt benchmark, STM32 AES/HASH + asm
 #   make CONFIG=hw   test       # wolfCrypt test, STM32 HW crypto
 #   make CONFIG=c    test       # wolfCrypt test, pure software
 #   make size-report            # aggregate size across all built configs
@@ -42,8 +44,8 @@ CONFIG   ?= hw
 ifeq ($(filter $(TARGET),test bench),)
   $(error TARGET must be one of: test | bench)
 endif
-ifeq ($(filter $(CONFIG),c hw),)
-  $(error CONFIG must be one of: c | hw)
+ifeq ($(filter $(CONFIG),c hw asm hybrid),)
+  $(error CONFIG must be one of: c | hw | asm | hybrid)
 endif
 
 BUILD_DIR := $(TOP)/build/$(TARGET)-$(CONFIG)
@@ -56,6 +58,12 @@ CPU_DEFS  := -DSTM32U585xx -DUSE_HAL_DRIVER
 VARIANT_DEFS := -DBUILD_CONFIG_NAME=\"$(CONFIG)\"
 ifeq ($(CONFIG),hw)
   VARIANT_DEFS += -DWOLFDEMO_CONFIG_HW
+endif
+ifeq ($(CONFIG),asm)
+  VARIANT_DEFS += -DWOLFDEMO_CONFIG_ASM
+endif
+ifeq ($(CONFIG),hybrid)
+  VARIANT_DEFS += -DWOLFDEMO_CONFIG_HYBRID
 endif
 ifeq ($(TARGET),bench)
   VARIANT_DEFS += -DWOLFDEMO_BENCH
@@ -133,13 +141,15 @@ HAL_SOURCES := \
   stm32u5xx_hal_uart_ex.c
 
 # HW crypto variant adds AES + HASH + PKA drivers
-ifeq ($(CONFIG),hw)
+ifneq ($(filter $(CONFIG),hw hybrid),)
 HAL_SOURCES += \
   stm32u5xx_hal_cryp.c \
   stm32u5xx_hal_cryp_ex.c \
   stm32u5xx_hal_hash.c \
-  stm32u5xx_hal_hash_ex.c \
-  stm32u5xx_hal_pka.c
+  stm32u5xx_hal_hash_ex.c
+endif
+ifeq ($(CONFIG),hw)
+HAL_SOURCES += stm32u5xx_hal_pka.c
 endif
 
 HAL_SRC := $(addprefix $(HAL_SRC_DIR)/,$(HAL_SOURCES))
@@ -161,6 +171,9 @@ WC_EXCLUDE := \
 
 WC_SRC := $(filter-out $(WC_EXCLUDE),$(WC_ALL)) \
           $(WC_SRC_DIR)/port/st/stm32.c
+ifneq ($(filter $(CONFIG),asm hybrid),)
+  WC_SRC += $(wildcard $(WC_SRC_DIR)/port/arm/thumb2-*_c.c)
+endif
 
 # Target entry point
 ifeq ($(TARGET),test)
