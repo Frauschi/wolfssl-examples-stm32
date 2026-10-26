@@ -154,9 +154,34 @@ extern "C" {
 /* Post-quantum: ML-KEM and ML-DSA. The ML-KEM small memory options cut its
  * heap use to a third at no cost in speed on this part. */
 #define WOLFSSL_HAVE_MLKEM
+#define WOLFSSL_MLKEM_DYNAMIC_KEYS
 #define WOLFSSL_MLKEM_MAKEKEY_SMALL_MEM
 #define WOLFSSL_MLKEM_ENCAPSULATE_SMALL_MEM
+
 #define WOLFSSL_HAVE_MLDSA
+#define WOLFSSL_MLDSA_DYNAMIC_KEYS
+#define WOLFSSL_MLDSA_MAKE_KEY_SMALL_MEM
+#define WOLFSSL_MLDSA_SIGN_SMALLEST_MEM
+#define WOLFSSL_MLDSA_VERIFY_SMALLEST_MEM
+
+/* Falcon is gated as experimental */
+#define WOLFSSL_EXPERIMENTAL_SETTINGS
+#define HAVE_FALCON
+#define WOLFSSL_FALCON_DYNAMIC_KEYS
+#define WOLFSSL_FALCON_SIGN_SMALLEST_MEM
+
+/* Stateless and stateful hash-based signatures, verify only */
+#define WOLFSSL_HAVE_SLHDSA
+#define WOLFSSL_SLHDSA_SHA2
+#define WOLFSSL_SLHDSA_VERIFY_ONLY
+#define WOLFSSL_WC_SLHDSA_SMALL_MEM
+
+#define WOLFSSL_HAVE_LMS
+#define WOLFSSL_LMS_VERIFY_ONLY
+#define WOLFSSL_HAVE_XMSS
+#define WOLFSSL_XMSS_VERIFY_ONLY
+/* SHA-512 is enabled, which would size the XMSS state for n = 64 */
+#define WOLFSSL_WC_XMSS_MAX_HASH_SIZE 256
 
 /* Drop legacy / unused algorithms */
 #define NO_MD4
