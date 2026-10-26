@@ -152,7 +152,18 @@ re_rng_ops = re.compile(
     + mem_suffix
 )
 
+# Remaining signature rows: Falcon, LMS/HSS, XMSS and SLH-DSA
+re_sig = re.compile(
+    r"^(?P<name>FALCON|LMS/HSS[_ ]\S+|XMSS\S*|SLH-DSA-\S+)\s+(?P<param>\d+)\s+"
+    r"(?P<op>key gen|gen|load|sign|verify)\s+"
+    r"(?P<ops>\d+)\s+ops took\s+(?P<sec>[\d.]+)\s+sec,.*?,\s+(?P<rate>[\d.]+)\s+ops/sec"
+    + mem_suffix
+)
+
 re_reset = re.compile(r"wolfcrypt benchmark", re.IGNORECASE)
+# Board banner and run line printed by main_bench.c before each run
+re_board = re.compile(r"^wolfSSL\s+(?P<chip>\S+)\s+@\s+(?P<mhz>\d+)\s+MHz,\s+(?P<accel>.+)$")
+re_run = re.compile(r"^wolfSSL\s+(?P<ver>[\d.]+)\s+\(CONFIG=(?P<cfg>\w+)\),\s+benchmark run\s+(?P<run>\d+)")
 
 def split_algo_mode(algo: str):
     a = algo.strip()
@@ -220,14 +231,34 @@ def norm_rng_ops(m):
     d = {"algo": "RNG", "mode": f"{m.group('hash')} {m.group('op')}", "result": f'{float(m.group("rate")):.3f} ops/s'}
     return _attach_mem(d, m)
 
+def norm_sig(m):
+    name, param, op = m.group("name"), m.group("param"), m.group("op")
+    if name == "FALCON":
+        algo, mode = {"1": "Falcon-512", "5": "Falcon-1024"}.get(param, f"Falcon-L{param}"), op
+    elif name.startswith("LMS/HSS"):
+        algo, mode = "LMS/HSS", f"{name[8:]} {op}"
+    elif name.startswith("XMSS"):
+        algo, mode = name.split("-", 1)[0], f"{name.split('-', 1)[-1]} {op}"
+    else:
+        fam, size = name[len("SLH-DSA-"):].rsplit("-", 1)
+        algo, mode = "SLH-DSA", f"{fam}-{param}{size.lower()} {op}"
+    d = {"algo": algo, "mode": mode, "result": f'{float(m.group("rate")):.3f} ops/s'}
+    return _attach_mem(d, m)
+
+re_ansi = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
 def parse_line(s):
-    s = s.strip()
+    s = re_ansi.sub("", s).strip()
     if not s: return None
     if re_reset.search(s): return {"reset": True}
+    m = re_board.match(s)
+    if m: return {"board": m.groupdict()}
+    m = re_run.match(s)
+    if m: return {"run": m.groupdict()}
     for rx, fn in ((re_stream,norm_stream),(re_rsa,norm_rsa),(re_dh,norm_dh),
                    (re_ecc,norm_ecc),(re_mlkem,norm_mlkem),(re_mldsa,norm_mldsa),
                    (re_curve25519,norm_curve25519),(re_ed25519,norm_ed25519),
-                   (re_rng_ops,norm_rng_ops)):
+                   (re_rng_ops,norm_rng_ops),(re_sig,norm_sig)):
         m = rx.match(s)
         if m: return fn(m)
     return None
@@ -309,8 +340,13 @@ def header(dots: int):
             )
     return Group(txt, txt2)
 
-def footer():
-    return Align.center("[dim]STM32U585 @ 160MHz • HW Accel[/dim]")
+def footer(board=None, run=None):
+    parts = []
+    if board:
+        parts.append(f"{board['chip']} @ {board['mhz']} MHz • {board['accel']}")
+    if run:
+        parts.append(f"wolfSSL {run['ver']} • run {run['run']}")
+    return Align.center("[dim]" + (" • ".join(parts) or "waiting for board") + "[/dim]")
 
 def visible_capacity():
     term_h = console.size.height
@@ -327,6 +363,7 @@ def main():
 
     last_hdr = time.monotonic()
     newest_key = None
+    board = run = None
 
     with Live(lay, refresh_per_second=8, console=console, screen=True):
         for s in line_iter():
@@ -339,6 +376,12 @@ def main():
 
             d = parse_line(s)
             if not d:
+                continue
+
+            if "board" in d or "run" in d:
+                board = d.get("board", board)
+                run = d.get("run", run)
+                lay["ftr"].update(footer(board, run))
                 continue
 
             if d.get("reset"):
