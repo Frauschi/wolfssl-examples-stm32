@@ -7,6 +7,7 @@ ap = argparse.ArgumentParser(description="wolfCrypt benchmark live TUI (single t
 ap.add_argument("port", nargs="?", help="Serial port like /dev/ttyACM0")
 ap.add_argument("baud", nargs="?", type=int, default=115200, help="Baud rate (default 115200)")
 ap.add_argument("--demo", action="store_true", help="Run a local demo data source to preview layout")
+ap.add_argument("--log", metavar="FILE", help="Append raw serial data with timestamps to FILE")
 args = ap.parse_args()
 
 PORT = args.port if args.port and (args.port.startswith("/dev/") or args.port.upper().startswith("COM")) else None
@@ -22,6 +23,7 @@ COL_STACK  = 10          # width of "Stack"
 CELL_PAD   = 1           # left/right padding inside each cell
 
 HDR_PERIOD = 0.5         # header heartbeat period (dots)
+STALL_REOPEN = 20.0      # reopen the serial port after this many seconds without data
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -32,6 +34,14 @@ from rich.text import Text
 from rich import box
 
 console = Console()
+
+rx = {"last": None, "reopens": 0}  # serial receive state shown in the footer
+
+def open_port(serial):
+    try:
+        return serial.Serial(PORT, BAUD, timeout=0.1)
+    except serial.SerialException:
+        return None
 
 def line_iter():
     if args.demo:
@@ -88,11 +98,30 @@ def line_iter():
     elif USE_SERIAL:
         import serial  # type: ignore
         ser = serial.Serial(PORT, BAUD, timeout=0.1)
+        log = open(args.log, "a") if args.log else None
         buf = b""
+        last_data = time.monotonic()
         while True:
-            chunk = ser.read(4096)
+            chunk = b""
+            if ser is not None:
+                try:
+                    chunk = ser.read(4096)
+                except serial.SerialException:
+                    ser.close(); ser = None
+            now = time.monotonic()
             if not chunk:
-                time.sleep(0.02); yield ""; continue
+                if now - last_data >= STALL_REOPEN:
+                    if ser is not None:
+                        ser.close()
+                    ser = open_port(serial)
+                    last_data = now
+                    rx["reopens"] += 1
+                    if log:
+                        log.write(f"{time.time():.3f} reopen {'ok' if ser else 'failed'}\n"); log.flush()
+                time.sleep(0.02 if ser else 0.5); yield ""; continue
+            last_data = rx["last"] = now
+            if log:
+                log.write(f"{time.time():.3f} {chunk!r}\n"); log.flush()
             buf += chunk
             while b"\n" in buf:
                 ln, buf = buf.split(b"\n", 1)
@@ -315,7 +344,7 @@ def layout_frame():
     lay.split_column(
         Layout(name="hdr", size=3),
         Layout(name="tbl", ratio=1),
-        Layout(name="ftr", size=1),
+        Layout(name="ftr", size=2),
     )
     return lay
 
@@ -346,12 +375,18 @@ def footer(board=None, run=None):
         parts.append(f"{board['chip']} @ {board['mhz']} MHz • {board['accel']}")
     if run:
         parts.append(f"wolfSSL {run['ver']} • run {run['run']}")
-    return Align.center("[dim]" + (" • ".join(parts) or "waiting for board") + "[/dim]")
+    txt = "[dim]" + (" • ".join(parts) or "waiting for board") + "[/dim]"
+    if USE_SERIAL:
+        age = "no rx yet" if rx["last"] is None else f"rx {time.monotonic() - rx['last']:.0f}s ago"
+        if rx["reopens"]:
+            age += f" • {rx['reopens']} reopens"
+        txt += "\n[dim]" + age + "[/dim]"
+    return Align.center(Text.from_markup(txt, justify="center"))
 
 def visible_capacity():
     term_h = console.size.height
-    # 3 (hdr) + 1 (ftr) + 2 (margins) + 3 (table header/borders) = 9
-    reserved = 9
+    # 3 (hdr) + 2 (ftr) + 2 (margins) + 3 (table header/borders) = 10
+    reserved = 10
     return max(1, term_h - reserved)
 
 # -------- main ----------
@@ -372,6 +407,7 @@ def main():
             if now - last_hdr >= HDR_PERIOD:
                 dot_counter = (dot_counter + 1) % 4
                 lay["hdr"].update(header(dot_counter))
+                lay["ftr"].update(footer(board, run))
                 last_hdr = now
 
             d = parse_line(s)
@@ -382,9 +418,10 @@ def main():
                 board = d.get("board", board)
                 run = d.get("run", run)
                 lay["ftr"].update(footer(board, run))
-                continue
+                if "board" in d:
+                    continue
 
-            if d.get("reset"):
+            if "run" in d or d.get("reset"):
                 rows.clear(); order.clear(); abs_index.clear()
                 newest_key = None
                 lay["tbl"].update(make_table_for_keys([]))

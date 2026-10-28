@@ -94,6 +94,16 @@ A demo mode can be executed using:
 python bench_tui.py --demo
 ```
 
+To record the raw serial data with timestamps, for example when the table
+stops updating, add `--log`:
+
+```
+python bench_tui.py /dev/ttyUSB0 115200 --log bench.log
+```
+
+The footer shows how long ago the last serial data arrived. After 20 seconds
+without data the script reopens the serial port.
+
 ## [bench_tpm_tui.py](bench_tpm_tui.py)
 
 This is very similar to `bench_tui.py`, but is designed to work with the
